@@ -1,0 +1,124 @@
+﻿AppType=JavaFX
+Build1=Default,b4j.example
+File1=main.bjl
+FileGroup1=Default Group
+Group=Default Group
+Library1=jcore
+Library2=jfx
+Library3=json
+Library4=jshell
+NumberOfFiles=1
+NumberOfLibraries=4
+NumberOfModules=0
+Version=7.8
+@EndOfDesignText@
+#Region Project Attributes 
+	#MainFormWidth: 600
+	#MainFormHeight: 600 
+#End Region
+Sub Process_Globals
+	Private fx As JFX
+	Private MainForm As Form
+	Private ListView1 As ListView
+End Sub
+
+Sub AppStart (Form1 As Form, Args() As String)
+	MainForm = Form1
+	MainForm.RootPane.LoadLayout("main") 'Load the layout file.
+	MainForm.Show
+End Sub
+
+'Return true to allow the default exceptions handler to handle the uncaught exception.
+Sub Application_Error (Error As Exception, StackTrace As String) As Boolean
+	Return True
+End Sub
+
+Sub Button1_MouseClicked (EventData As MouseEvent)
+	ListView1.Items.Clear
+	Dim dc As DirectoryChooser
+	dc.Initialize
+	Dim dirPath As String=dc.Show(MainForm)
+	import(dirPath)
+End Sub
+
+Public Sub import(dirPath As String)
+	Dim filesList As List
+	filesList.Initialize
+	importDir(dirPath,filesList)
+	For Each one As List  In filesList
+		ListView1.Items.Add(one)
+	Next
+End Sub
+
+Sub importDir(dirPath As String,filesList As List)
+	Dim files As List=File.ListFiles(dirPath)
+	For Each filename As String In files
+		If File.IsDirectory(dirPath,filename) Then
+			importDir(File.Combine(dirPath,filename),filesList)
+		End If
+		Dim lowerCaseName As String=filename.ToLowerCase
+		If lowerCaseName.EndsWith(".itp") Then
+			Dim one As List
+			one.Initialize
+			one.Add(filename)
+			one.Add(dirPath)
+			filesList.Add(one)
+		End If
+	Next
+End Sub
+
+Sub Button2_MouseClicked (EventData As MouseEvent)
+	Dim documents As List
+	documents.Initialize
+	For Each one As List In ListView1.Items
+		Dim filename As String=one.Get(0)
+		Dim dirPath As String=one.Get(1)
+		Dim json As JSONParser
+		json.Initialize(File.ReadString(dirPath,filename))
+		Dim projectFile As Map = json.NextObject
+		Dim imgDir As String=projectFile.Get("dirPath")
+		Dim imgMap As Map=projectFile.Get("images")
+		For Each imgName As String In imgMap.Keys
+			Dim oneImg As Map = imgMap.Get(imgName)
+			Dim boxes As List=oneImg.Get("boxes")
+			Dim index As Int=0
+			For Each box As Map In boxes 
+				Dim source As String=box.Get("text")
+				Dim target As String=box.GetDefault("target","")
+				If target<>"" Then
+					Dim sb As StringBuilder
+					sb.Initialize
+					sb.Append(imgDir)
+					If imgName.StartsWith("/")=False And imgName.StartsWith("\")=False Then
+						sb.Append("/")
+					End If
+					sb.Append(imgName)
+					sb.Append("/index:")
+					sb.Append(index)
+					Dim doc As Map
+					doc.Initialize
+					doc.Put("name",sb.ToString.Replace("\","/"))
+					doc.Put("source",source)
+					doc.Put("target",target)
+					documents.Add(doc)
+				End If
+				index=index+1
+			Next
+		Next
+	Next
+	Dim jsonG As JSONGenerator
+	jsonG.Initialize2(documents)
+	File.WriteString(File.DirApp,"doc.json",jsonG.ToPrettyString(4))
+End Sub
+
+Sub Button3_MouseClicked (EventData As MouseEvent)
+	Dim sh As Shell
+	sh.Initialize("sh","node",Array As String("buildIndex.js"))
+	sh.WorkingDirectory=File.DirApp
+	sh.Run(-1)
+	wait for sh_ProcessCompleted (Success As Boolean, ExitCode As Int, StdOut As String, StdErr As String)
+	Log(Success)
+	If Success Then
+		fx.Msgbox(MainForm,"成功","")
+	End If
+End Sub
