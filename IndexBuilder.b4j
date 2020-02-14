@@ -7,9 +7,10 @@ Library1=jcore
 Library2=jfx
 Library3=json
 Library4=jshell
+Module1=Utils
 NumberOfFiles=1
 NumberOfLibraries=4
-NumberOfModules=0
+NumberOfModules=1
 Version=7.8
 @EndOfDesignText@
 #Region Project Attributes 
@@ -20,6 +21,7 @@ Sub Process_Globals
 	Private fx As JFX
 	Private MainForm As Form
 	Private ListView1 As ListView
+	Private root As String
 End Sub
 
 Sub AppStart (Form1 As Form, Args() As String)
@@ -38,6 +40,7 @@ Sub Button1_MouseClicked (EventData As MouseEvent)
 	Dim dc As DirectoryChooser
 	dc.Initialize
 	Dim dirPath As String=dc.Show(MainForm)
+	root=dirPath
 	import(dirPath)
 End Sub
 
@@ -71,6 +74,8 @@ Sub Button2_MouseClicked (EventData As MouseEvent)
 	Dim documents As List
 	documents.Initialize
 	For Each one As List In ListView1.Items
+		Dim projectDocuemntsMap As Map
+		projectDocuemntsMap.Initialize
 		Dim filename As String=one.Get(0)
 		Dim dirPath As String=one.Get(1)
 		Dim json As JSONParser
@@ -86,25 +91,21 @@ Sub Button2_MouseClicked (EventData As MouseEvent)
 				Dim source As String=box.Get("text")
 				Dim target As String=box.GetDefault("target","")
 				If target<>"" Then
-					Dim sb As StringBuilder
-					sb.Initialize
-					sb.Append(imgDir)
-					If imgName.StartsWith("/")=False And imgName.StartsWith("\")=False Then
-						sb.Append("/")
-					End If
-					sb.Append(imgName)
-					sb.Append("/index:")
-					sb.Append(index)
+					Dim name As String=filename&":"&imgName&":"&index
 					Dim doc As Map
 					doc.Initialize
-					doc.Put("name",sb.ToString.Replace("\","/"))
+					doc.Put("name",name)
 					doc.Put("source",source)
 					doc.Put("target",target)
+					projectDocuemntsMap.Put(name,CreateMap("source":source,"target":target))
 					documents.Add(doc)
 				End If
 				index=index+1
 			Next
 		Next
+		Dim jsonG As JSONGenerator
+		jsonG.Initialize(projectDocuemntsMap)
+		File.WriteString(root,filename&"-doc.json",jsonG.ToString)
 	Next
 	Dim jsonG As JSONGenerator
 	jsonG.Initialize2(documents)
@@ -119,6 +120,32 @@ Sub Button3_MouseClicked (EventData As MouseEvent)
 	wait for sh_ProcessCompleted (Success As Boolean, ExitCode As Int, StdOut As String, StdErr As String)
 	Log(Success)
 	If Success Then
+		File.Copy(File.DirApp,"index.json",root,"index.json")
 		fx.Msgbox(MainForm,"成功","")
 	End If
+End Sub
+
+Sub Button4_MouseClicked (EventData As MouseEvent)
+	For Each one As List In ListView1.Items
+	    Dim filename As String=one.Get(0)
+		Dim dirPath As String=one.Get(1)
+		Dim json As JSONParser
+		json.Initialize(File.ReadString(dirPath,filename))
+		Dim projectFile As Map = json.NextObject
+		Dim imgMap As Map=projectFile.Get("images")
+		Dim keys As List
+		keys.Initialize
+		For Each key As String In imgMap.Keys
+			keys.Add(key)
+		Next
+		keys.Sort(True)
+		keys=Utils.sortedList(keys)
+		Dim map1 As Map
+		map1.Initialize
+		map1.Put("dirPath",projectFile.Get("dirPath"))
+		map1.Put("images",keys)
+		Dim jsonG As JSONGenerator
+		jsonG.Initialize(map1)
+		File.WriteString(dirPath,filename&"-images.json",jsonG.ToString)
+	Next
 End Sub
