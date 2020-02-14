@@ -74,16 +74,27 @@ Sub Button2_MouseClicked (EventData As MouseEvent)
 	Dim documents As List
 	documents.Initialize
 	For Each one As List In ListView1.Items
+		
 		Dim projectDocuemntsMap As Map
 		projectDocuemntsMap.Initialize
+		Dim projectBoxesGeometriesMap As Map
+		projectBoxesGeometriesMap.Initialize
+		
 		Dim filename As String=one.Get(0)
 		Dim dirPath As String=one.Get(1)
+		Dim projectFilePath As String=File.Combine(dirPath,filename)
+		
 		Dim json As JSONParser
-		json.Initialize(File.ReadString(dirPath,filename))
+		json.Initialize(File.ReadString(projectFilePath,""))
 		Dim projectFile As Map = json.NextObject
+		
 		Dim imgDir As String=projectFile.Get("dirPath")
 		Dim imgMap As Map=projectFile.Get("images")
 		For Each imgName As String In imgMap.Keys
+			Dim img As Image
+			img=fx.LoadImage(getDirPath(imgDir,projectFilePath),imgName)
+			Dim ratio As Double=img.Width/img.Height
+			projectBoxesGeometriesMap.Put("ratio",ratio)
 			Dim oneImg As Map = imgMap.Get(imgName)
 			Dim boxes As List=oneImg.Get("boxes")
 			Dim index As Int=0
@@ -92,12 +103,14 @@ Sub Button2_MouseClicked (EventData As MouseEvent)
 				Dim target As String=box.GetDefault("target","")
 				If target<>"" Then
 					Dim name As String=filename&":"&imgName&":"&index
+					Dim filenameLessName As String=imgName&":"&index
 					Dim doc As Map
 					doc.Initialize
 					doc.Put("name",name)
 					doc.Put("source",source)
 					doc.Put("target",target)
-					projectDocuemntsMap.Put(name,CreateMap("source":source,"target":target))
+					projectDocuemntsMap.Put(filenameLessName,CreateMap("source":source,"target":target))
+					projectBoxesGeometriesMap.Put(filenameLessName,geometryInPercent(box.Get("geometry"),img))
 					documents.Add(doc)
 				End If
 				index=index+1
@@ -106,10 +119,42 @@ Sub Button2_MouseClicked (EventData As MouseEvent)
 		Dim jsonG As JSONGenerator
 		jsonG.Initialize(projectDocuemntsMap)
 		File.WriteString(root,filename&"-doc.json",jsonG.ToString)
+		jsonG.Initialize(projectBoxesGeometriesMap)
+		File.WriteString(root,filename&"-geometry.json",jsonG.ToString)
 	Next
 	Dim jsonG As JSONGenerator
 	jsonG.Initialize2(documents)
 	File.WriteString(File.DirApp,"doc.json",jsonG.ToPrettyString(4))
+End Sub
+
+Sub geometryInPercent(geometry As Map,img As Image) As Map
+	Dim imgWidth,imgHeight As Int
+	imgWidth=img.Width
+	imgHeight=img.Height
+	Dim X,Y,height,width As Double
+	X=geometry.Get("X")/imgWidth
+	Y=geometry.Get("Y")/imgHeight
+	width=geometry.Get("width")/imgWidth
+	height=geometry.Get("height")/imgHeight
+	X=NumberFormat(X,1,4)
+	Y=NumberFormat(Y,1,4)
+	width=NumberFormat(width,1,4)
+	height=NumberFormat(height,1,4)
+	geometry.Put("X",X)
+	geometry.Put("Y",Y)
+	geometry.Put("width",width)
+	geometry.Put("height",height)
+	Return geometry
+End Sub
+
+Sub getDirPath(dirPath As String,projectFilePath As String) As String
+	If dirPath.StartsWith("./") Then
+		dirPath=dirPath.SubString2(2,dirPath.Length)
+		Dim projectDir As String= File.GetFileParent(projectFilePath)
+		Return File.Combine(projectDir,dirPath)
+	Else
+		Return dirPath
+	End If
 End Sub
 
 Sub Button3_MouseClicked (EventData As MouseEvent)
